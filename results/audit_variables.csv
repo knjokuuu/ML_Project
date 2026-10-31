@@ -1,0 +1,41 @@
+column,pandas_dtype,variable_type,role,missing_pct_subset,n_unique_subset
+AppID,int64,identifier,excluded: identifier / text / media / unused,0.0,30624
+Name,str,identifier,excluded: identifier / text / media / unused,0.0,30510
+Release date,str,date (text),feature,0.0,4688
+Estimated owners,str,categorical range (text),excluded: leakage (known only after release),0.0,13
+Peak CCU,int64,numeric (count),excluded: leakage (known only after release),0.0,1100
+Required age,int64,numeric (ordinal),feature,0.0,11
+Price,float64,numeric (continuous),feature,0.0,619
+Discount,int64,numeric (percent),excluded: scrape-date snapshot,0.0,86
+DLC count,int64,numeric (count),excluded: scrape-date snapshot,0.0,108
+About the game,str,free text,excluded: identifier / text / media / unused,0.2,30445
+Supported languages,str,multi-valued text (list),feature,0.0,9737
+Full audio languages,str,multi-valued text (list),feature,0.0,1931
+Reviews,str,free text,excluded: leakage (known only after release),74.8,7639
+Header image,str,url / media,excluded: identifier / text / media / unused,0.0,30530
+Website,str,url / media,excluded: identifier / text / media / unused,36.9,16363
+Support url,str,url / media,excluded: identifier / text / media / unused,40.9,11967
+Support email,str,url / media,excluded: identifier / text / media / unused,17.7,14695
+Windows,bool,boolean,feature,0.0,2
+Mac,bool,boolean,feature,0.0,2
+Linux,bool,boolean,feature,0.0,2
+Metacritic score,int64,numeric (score),excluded: leakage (known only after release),0.0,73
+Metacritic url,str,url / media,excluded: leakage (known only after release),86.8,3976
+User score,int64,numeric (score),excluded: leakage (known only after release),0.0,17
+Positive,int64,numeric (count),builds the target (excluded from features),0.0,5537
+Negative,int64,numeric (count),builds the target (excluded from features),0.0,2726
+Score rank,float64,numeric (rank),excluded: leakage (known only after release),99.9,3
+Achievements,int64,numeric (count),feature,0.0,407
+Recommendations,int64,numeric (count),excluded: leakage (known only after release),0.0,5146
+Notes,str,free text,excluded: leakage (known only after release),82.5,4609
+Average playtime forever,int64,numeric (minutes),excluded: leakage (known only after release),0.0,2905
+Average playtime two weeks,int64,numeric (minutes),excluded: leakage (known only after release),0.0,926
+Median playtime forever,int64,numeric (minutes),excluded: leakage (known only after release),0.0,2349
+Median playtime two weeks,int64,numeric (minutes),excluded: leakage (known only after release),0.0,923
+Developers,str,multi-valued text (list),excluded: identifier / text / media / unused,0.0,18992
+Publishers,str,multi-valued text (list),excluded: identifier / text / media / unused,0.7,14597
+Categories,str,multi-valued text (list),feature,0.5,6215
+Genres,str,multi-valued text (list),feature,0.3,1554
+Tags,str,multi-valued text (list),excluded: scrape-date snapshot,0.0,29932
+Screenshots,str,url / media,excluded: identifier / text / media / unused,0.0,30538
+Movies,float64,url / media,excluded: identifier / text / media / unused,100.0,0
