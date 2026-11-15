@@ -1,0 +1,5 @@
+variant,roc_auc_mean,roc_auc_sd,change_vs_all,worse_in_folds
+All 12 features,0.74,0.009,0.0,0
+Without release year and month,0.7133,0.0068,-0.0267,5
+Without categories,0.7235,0.0091,-0.0165,5
+"Without release year, month and categories",0.6845,0.0075,-0.0555,5

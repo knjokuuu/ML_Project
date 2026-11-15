@@ -53,7 +53,10 @@ class MultiHotTopK(BaseEstimator, TransformerMixin):
         return np.array([f"{self.prefix_}_{v}" for v in self.vocabulary_])
 
 
-def make_preprocessor(top_k=20):
+def make_preprocessor(top_k=20, exclude=()):
+    """Build the ColumnTransformer. `exclude` lists raw feature names to leave out
+    (used for the ablation in Milestone 3); the default keeps all 12 features."""
+    ex = set(exclude)
     log_pipe = Pipeline([
         ("impute", SimpleImputer(strategy="median")),
         ("log", FunctionTransformer(np.log1p, feature_names_out="one-to-one")),
@@ -63,10 +66,12 @@ def make_preprocessor(top_k=20):
         ("impute", SimpleImputer(strategy="median")),
         ("scale", StandardScaler()),
     ])
-    return ColumnTransformer([
-        ("log_num", log_pipe, LOG_NUMERIC),
-        ("num", plain_pipe, PLAIN_NUMERIC),
-        ("bin", "passthrough", BINARY),
-        ("genres", MultiHotTopK(top_k), ["genres_list"]),
-        ("categories", MultiHotTopK(top_k), ["categories_list"]),
-    ])
+    parts = [
+        ("log_num", log_pipe, [c for c in LOG_NUMERIC if c not in ex]),
+        ("num", plain_pipe, [c for c in PLAIN_NUMERIC if c not in ex]),
+        ("bin", "passthrough", [c for c in BINARY if c not in ex]),
+        ("genres", MultiHotTopK(top_k), ["genres_list"] if "genres_list" not in ex else []),
+        ("categories", MultiHotTopK(top_k),
+         ["categories_list"] if "categories_list" not in ex else []),
+    ]
+    return ColumnTransformer([p for p in parts if p[2]])

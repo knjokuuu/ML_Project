@@ -1,0 +1,208 @@
+"""Milestone 3: error analysis, permutation importance and a small feature ablation for the
+current best model. Run AFTER 03_models.py (it reads results/best_params.json and
+results/m3_oof_predictions.csv).
+
+Everything here uses the training set only; the test set stays closed.
+
+Run from the repo root:  python src/04_error_analysis.py [path/to/games.csv]
+"""
+import json
+import sys
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from sklearn.inspection import permutation_importance
+from sklearn.model_selection import StratifiedKFold, cross_validate, train_test_split
+
+sys.path.insert(0, str(Path(__file__).parent))
+from data_prep import CUTOFF, RANDOM_STATE, build_features, load_raw, make_labelled_subset, top_values
+from models import from_search_params, slug
+from pipeline import FEATURE_COLUMNS
+from style import BLUE, INK, MUTED, ORANGE, apply_style
+
+path = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else "data/games.csv"
+RESULTS = Path("results")
+FIGURES = RESULTS / "figures"
+FIGURES.mkdir(parents=True, exist_ok=True)
+apply_style()
+pd.set_option("display.width", 160)
+pd.set_option("display.max_columns", 30)
+
+# ---------------------------------------------------------------- data, split, saved results
+sub = make_labelled_subset(load_raw(path))
+X, y = build_features(sub)
+X = X[FEATURE_COLUMNS]
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.20, stratify=y, random_state=RANDOM_STATE)
+
+cfg = json.load(open(RESULTS / "best_params.json"))
+oof = pd.read_csv(RESULTS / "m3_oof_predictions.csv", index_col=0)
+if not oof.index.equals(X_train.index):
+    sys.exit("results/m3_oof_predictions.csv does not match this split - rerun 03_models.py "
+             "on the same data file.")
+if cfg.get("quick_mode"):
+    print("WARNING: results come from a --quick run; rerun 03_models.py without --quick "
+          "before reporting.\n")
+best_name = cfg["best_model"]
+best_params = cfg["models"][best_name]["best_params"]
+print(f"Analysing the current best model: {best_name}\nSettings: {best_params}\n")
+
+proba = oof[slug(best_name)]
+d = X_train.copy()
+d["y"] = y_train
+d["proba"] = proba
+d["pred"] = (proba >= 0.5).astype(int)
+d["error"] = (d["pred"] != d["y"]).astype(int)
+d["fp"] = ((d["pred"] == 1) & (d["y"] == 0)).astype(int)
+d["fn"] = ((d["pred"] == 0) & (d["y"] == 1)).astype(int)
+d["ratio"] = oof["ratio"]
+d["total"] = oof["total"]
+d["Name"] = sub.loc[d.index, "Name"]
+overall = d["error"].mean()
+print(f"Overall out-of-fold error rate: {overall:.3f} (accuracy {1 - overall:.3f}); "
+      f"false positives {d['fp'].mean():.3f}, false negatives {d['fn'].mean():.3f}\n")
+
+# ---------------------------------------------------------------- error by slice
+slices = []
+
+
+def add_slice(title, groups):
+    t = d.groupby(groups, observed=True).agg(
+        n=("error", "size"), error_rate=("error", "mean"), fp_share=("fp", "mean"),
+        fn_share=("fn", "mean"), well_received_rate=("y", "mean")).reset_index()
+    t.columns = ["group"] + list(t.columns[1:])
+    t.insert(0, "slice", title)
+    slices.append(t)
+    print(f"-- {title} --")
+    print(t.drop(columns="slice").round(3).to_string(index=False), "\n")
+
+
+add_slice("Distance of true positive share from the 80% cut-off",
+          pd.cut((d["ratio"] - CUTOFF).abs(), [-1, 0.05, 0.10, 0.20, 2],
+                 labels=["within 0.05", "0.05 to 0.10", "0.10 to 0.20", "over 0.20"]))
+add_slice("Release year",
+          pd.cut(d["release_year"], [0, 2015, 2018, 2021, 3000],
+                 labels=["2015 or earlier", "2016-2018", "2019-2021", "2022 or later"]))
+add_slice("Number of reviews",
+          pd.cut(d["total"], [0, 99, 499, 1999, 10**12],
+                 labels=["50-99", "100-499", "500-1,999", "2,000+"]))
+add_slice("Price", pd.cut(d["Price"], [-0.01, 0, 5, 15, 10**6],
+                          labels=["Free", "up to $5", "$5-15", "over $15"]))
+for g in top_values(d["genres_list"], 8):
+    mask = d["genres_list"].map(lambda lst, g=g: g in lst)
+    t = pd.DataFrame({"slice": "Genre (a game can have several)", "group": [g], "n": [mask.sum()],
+                      "error_rate": [d.loc[mask, "error"].mean()], "fp_share": [d.loc[mask, "fp"].mean()],
+                      "fn_share": [d.loc[mask, "fn"].mean()],
+                      "well_received_rate": [d.loc[mask, "y"].mean()]})
+    slices.append(t)
+genre_t = pd.concat([t for t in slices if t["slice"].iloc[0].startswith("Genre")])
+print("-- Genre (a game can have several; top 8 by size) --")
+print(genre_t.drop(columns="slice").round(3).to_string(index=False), "\n")
+pd.concat(slices).round(4).to_csv(RESULTS / "error_by_slice.csv", index=False)
+
+# ---------------------------------------------------------------- most confident mistakes
+wrong = d[d["error"] == 1].copy()
+wrong["confidence"] = (wrong["proba"] - 0.5).abs()
+worst = wrong.sort_values("confidence", ascending=False).head(15)
+worst_out = pd.DataFrame({
+    "Name": worst["Name"], "release_year": worst["release_year"].astype(int), "Price": worst["Price"],
+    "genres": worst["genres_list"].map(lambda l: ", ".join(l[:3])),
+    "reviews": worst["total"].astype(int), "true_positive_share": worst["ratio"].round(3),
+    "true_label": worst["y"], "predicted_probability": worst["proba"].round(3)})
+worst_out.to_csv(RESULTS / "worst_errors.csv", index=False)
+print("-- The 15 most confident mistakes --")
+print(worst_out.to_string(index=False), "\n")
+
+# ---------------------------------------------------------------- figure: where errors are
+t_dist, t_year, t_rev = slices[0], slices[1], slices[2]
+fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.3), sharey=True)
+for ax, t, title, xlabel in zip(
+        axes, [t_dist, t_year, t_rev],
+        ["By distance from the 80% cut-off", "By release year", "By number of reviews"],
+        ["|true positive share - 0.80|", "Release year", "Reviews (positive + negative)"]):
+    bars = ax.bar(t["group"].astype(str), t["error_rate"] * 100, color=BLUE, width=0.62)
+    ax.axhline(overall * 100, color=MUTED, linestyle="--", linewidth=1.2)
+    for b, v, n in zip(bars, t["error_rate"], t["n"]):
+        ax.text(b.get_x() + b.get_width() / 2, v * 100 + 0.8, f"{v:.0%}", ha="center",
+                color=INK, fontsize=10)
+    ax.set_title(title, fontsize=11)
+    ax.set_xlabel(xlabel)
+    ax.tick_params(axis="x", labelsize=9)
+    ax.grid(axis="x", visible=False)
+axes[0].set_ylabel("Misclassified (%)")
+axes[0].set_ylim(0, max(t_dist["error_rate"].max(), t_year["error_rate"].max(),
+                        t_rev["error_rate"].max()) * 100 * 1.18)
+fig.suptitle(f"Where the {best_name.lower()} makes mistakes (out-of-fold, training set)",
+             x=0.01, y=1.0, ha="left", fontweight="bold")
+fig.text(0.01, 0.925, f"Dashed line = overall error rate ({overall:.0%})", ha="left",
+         color=MUTED, fontsize=10)
+fig.tight_layout(rect=[0, 0, 1, 0.9])
+fig.savefig(FIGURES / "07_error_analysis.png", dpi=160, bbox_inches="tight")
+plt.close(fig)
+
+# ---------------------------------------------------------------- permutation importance
+Xa, Xv, ya, yv = train_test_split(X_train, y_train, test_size=0.20, stratify=y_train,
+                                  random_state=RANDOM_STATE)
+model = from_search_params(best_name, best_params).fit(Xa, ya)
+pi = permutation_importance(model, Xv, yv, scoring="roc_auc", n_repeats=10,
+                            random_state=RANDOM_STATE, n_jobs=1)
+imp = pd.DataFrame({"feature": X.columns, "roc_auc_drop": pi.importances_mean,
+                    "sd": pi.importances_std}).sort_values("roc_auc_drop", ascending=False)
+imp.round(4).to_csv(RESULTS / "permutation_importance.csv", index=False)
+print("-- Permutation importance (drop in ROC-AUC when a feature is shuffled; "
+      "validation part of the training set) --")
+print(imp.round(4).to_string(index=False), "\n")
+
+order = imp.iloc[::-1]
+fig, ax = plt.subplots(figsize=(7.2, 4.6))
+ax.barh(order["feature"], order["roc_auc_drop"], xerr=order["sd"], color=BLUE, height=0.6,
+        error_kw={"ecolor": MUTED, "elinewidth": 1.2, "capsize": 3})
+ax.set_xlabel("Drop in ROC-AUC when the feature is shuffled")
+ax.set_title(f"Permutation importance ({best_name})")
+ax.grid(axis="y", visible=False)
+fig.tight_layout()
+fig.savefig(FIGURES / "08_permutation_importance.png", dpi=160, bbox_inches="tight")
+plt.close(fig)
+
+# ---------------------------------------------------------------- ablation (same outer folds)
+outer = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+variants = {
+    "All 12 features": (),
+    "Without release year and month": ("release_year", "release_month"),
+    "Without categories": ("categories_list",),
+    "Without release year, month and categories": ("release_year", "release_month",
+                                                   "categories_list"),
+}
+rows, base_scores = [], None
+for label, excl in variants.items():
+    cv = cross_validate(from_search_params(best_name, best_params, exclude=excl), X_train,
+                        y_train, cv=outer, scoring="roc_auc", n_jobs=1)
+    s = cv["test_score"]
+    base_scores = s if base_scores is None else base_scores
+    rows.append({"variant": label, "roc_auc_mean": s.mean(), "roc_auc_sd": s.std(ddof=1),
+                 "change_vs_all": s.mean() - base_scores.mean(),
+                 "worse_in_folds": int((s < base_scores).sum())})
+# ---------------------------------------------------------------- seed stability
+# Re-run the chosen settings with different random seeds (bagging / early-stopping splits
+# are random) to see how much the score depends on luck.
+seed_rows = []
+for seed in [RANDOM_STATE, RANDOM_STATE + 1, RANDOM_STATE + 2]:
+    cv = cross_validate(from_search_params(best_name, {**best_params, "clf__random_state": seed}),
+                        X_train, y_train, cv=outer, scoring="roc_auc", n_jobs=1)
+    seed_rows.append({"seed": seed, "roc_auc_mean": cv["test_score"].mean(),
+                      "roc_auc_sd_over_folds": cv["test_score"].std(ddof=1)})
+seeds = pd.DataFrame(seed_rows)
+seeds.round(4).to_csv(RESULTS / "seed_stability.csv", index=False)
+print("-- Seed stability: chosen settings, 3 random seeds, same 5 outer folds --")
+print(seeds.round(4).to_string(index=False))
+print(f"range of mean ROC-AUC across seeds: {seeds['roc_auc_mean'].max() - seeds['roc_auc_mean'].min():.4f}\n")
+
+abl = pd.DataFrame(rows)
+abl.round(4).to_csv(RESULTS / "ablation.csv", index=False)
+print("-- Ablation: best model's fixed settings, 5-fold CV on the training set --")
+print(abl.round(4).to_string(index=False))
+print("\n(No retuning per variant, so the drops are if anything slightly overstated.)")
+print("\nSaved: results/error_by_slice.csv, worst_errors.csv, permutation_importance.csv, "
+      "ablation.csv, seed_stability.csv, figures/07_error_analysis.png, figures/08_permutation_importance.png")

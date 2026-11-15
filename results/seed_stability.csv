@@ -1,0 +1,4 @@
+seed,roc_auc_mean,roc_auc_sd_over_folds
+42,0.74,0.009
+43,0.7402,0.0089
+44,0.7401,0.008
