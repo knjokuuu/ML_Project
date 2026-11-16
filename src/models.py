@@ -1,8 +1,7 @@
-"""Model definitions and hyperparameter search spaces for Milestone 3.
+"""Model definitions and hyperparameter search spaces.
 
-Baselines (dummy, logistic regression) are exactly as in Milestone 2 and are not tuned.
-The two learned models compared against them are a random forest (Week 7, bagging) and a
-histogram gradient-boosting classifier (Week 7, boosting).
+Baselines (dummy, logistic regression) are not tuned.
+The two learned models compared against them are a random forest and a histogram gradient-boosting classifier.
 """
 import re
 
@@ -22,12 +21,10 @@ def make_rf(**params):
 
 def make_hgb(**params):
     # max_iter is a ceiling: early stopping on an internal 10% validation split ends
-    # training when the score has not improved for 15 rounds (Week 7, early stopping).
+    # training when the score has not improved for 15 rounds
     base = dict(early_stopping=True, n_iter_no_change=15, random_state=RANDOM_STATE)
     return HistGradientBoostingClassifier(**{**base, **params})
 
-
-# Models evaluated exactly as in Milestone 2 (not tuned).
 FIXED_MODELS = {
     "Majority-class (dummy)": lambda: DummyClassifier(strategy="most_frequent"),
     "Logistic regression": lambda: LogisticRegression(max_iter=1000, random_state=RANDOM_STATE),

@@ -1,10 +1,7 @@
-"""Milestone 3: error analysis, permutation importance and a small feature ablation for the
-current best model. Run AFTER 03_models.py (it reads results/best_params.json and
-results/m3_oof_predictions.csv).
+"""Error analysis, permutation importance and a small feature ablation for the current best model.
 
 Everything here uses the training set only; the test set stays closed.
 
-Run from the repo root:  python src/04_error_analysis.py [path/to/games.csv]
 """
 import json
 import sys
@@ -166,7 +163,7 @@ fig.tight_layout()
 fig.savefig(FIGURES / "08_permutation_importance.png", dpi=160, bbox_inches="tight")
 plt.close(fig)
 
-# ---------------------------------------------------------------- ablation (same outer folds)
+# ---------------------------------------------------------------- ablation
 outer = StratifiedKFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
 variants = {
     "All 12 features": (),

@@ -1,6 +1,4 @@
-"""Milestone 3: compare the baselines with two tuned learned models under ONE protocol.
-
-Baselines (unchanged from Milestone 2, not tuned): majority-class dummy, logistic regression.
+"""Baselines: majority-class dummy, logistic regression.
 Learned models: random forest and histogram gradient boosting, each evaluated with default
 settings and with settings tuned by random search.
 
@@ -10,9 +8,6 @@ Protocol
     search (3 inner folds, ROC-AUC) picks the settings, the outer validation fold scores
     them, so the reported number is not inflated by the search;
   * the test set is never used here.
-
-Run from the repo root:  python src/03_models.py [path/to/games.csv] [--quick]
-(--quick shrinks the search so you can check the script runs; do not report quick results.)
 """
 import argparse
 import json

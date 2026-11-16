@@ -129,7 +129,7 @@ F1 0.7306 and accuracy 0.6796.
 Run this after the full model comparison:
 
 ```text
-python src/04_error_analysis [path/to/games.csv]
+python src/04_error_analysis.py [path/to/games.csv]
 ```
 
 This analyses the selected model using out-of-fold predictions, including:
